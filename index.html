@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Novela Workspace</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="top-nav">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">✶</span>
+      <div>
+        <div class="brand-title">Novela Workspace</div>
+        <div class="brand-subtitle">Базовий редактор інтерактивних історій</div>
+      </div>
+    </div>
+    <div class="nav-actions">
+      <button class="ghost" id="help-btn">Допомога</button>
+      <button class="ghost" id="profile-btn">Профіль</button>
+      <button id="preview-btn">Попередній перегляд</button>
+      <div class="export-group">
+        <button id="export-html">Експорт HTML</button>
+        <button id="export-json">Експорт JSON</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="sidebar">
+      <section class="panel">
+        <header class="panel-header">
+          <div>
+            <p class="eyebrow">Організація</p>
+            <h2>Сцени</h2>
+          </div>
+          <button id="add-scene">+ Додати сцену</button>
+        </header>
+        <div id="scenes-list" class="list"></div>
+      </section>
+
+      <section class="panel">
+        <header class="panel-header">
+          <div>
+            <p class="eyebrow">Логіка</p>
+            <h2>Зміни</h2>
+          </div>
+          <button id="add-variable">+ Додати зміну</button>
+        </header>
+        <div id="variables-list" class="list"></div>
+      </section>
+
+      <section class="panel">
+        <header class="panel-header">
+          <div>
+            <p class="eyebrow">Збереження</p>
+            <h2>Швидке збереження</h2>
+          </div>
+        </header>
+        <div class="quick-save">
+          <p>Дані автоматично зберігаються у вашому браузері.</p>
+          <button id="copy-link">Скопіювати посилання на проект</button>
+          <p class="small" id="save-status" role="status"></p>
+        </div>
+      </section>
+    </aside>
+
+    <section class="canvas" aria-label="Робоче полотно для сцен">
+      <header class="panel-header">
+        <div>
+          <p class="eyebrow">Карта</p>
+          <h2>Поточний проєкт</h2>
+        </div>
+        <div class="legend">
+          <span class="dot blue"></span>Сцена
+          <span class="dot green"></span>Перехід
+        </div>
+      </header>
+      <div id="canvas-grid" class="canvas-grid"></div>
+    </section>
+
+    <aside class="inspector">
+      <header class="panel-header">
+        <div>
+          <p class="eyebrow">Редагування</p>
+          <h2>Сцена</h2>
+        </div>
+      </header>
+      <div class="inspector-body" id="inspector-body">
+        <p class="muted">Виберіть сцену, щоб розпочати редагування.</p>
+      </div>
+    </aside>
+  </main>
+
+  <dialog id="scene-dialog">
+    <form method="dialog" id="scene-form">
+      <header>
+        <h3>Нова сцена</h3>
+      </header>
+      <label>
+        Назва сцени
+        <input type="text" name="title" required placeholder="Наприклад, Вступ" />
+      </label>
+      <label>
+        Фон (необов'язково)
+        <input type="text" name="background" placeholder="URL або опис" />
+      </label>
+      <label>
+        Текст сцени
+        <textarea name="text" rows="4" required placeholder="Опишіть, що відбувається"></textarea>
+      </label>
+      <menu>
+        <button value="cancel" type="reset" class="ghost">Скасувати</button>
+        <button value="default" type="submit">Зберегти</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <dialog id="help-dialog">
+    <header>
+      <h3>Коротка довідка</h3>
+    </header>
+    <ul class="help-list">
+      <li>Додавайте сцени у лівій панелі та перетягуйте їх у полотні.</li>
+      <li>Редагуйте текст, фон та медіа у правій панелі після вибору сцени.</li>
+      <li>Створюйте переходи, додаючи варіанти вибору й обираючи цільову сцену.</li>
+      <li>Використовуйте "Попередній перегляд" для швидкої перевірки логіки.</li>
+      <li>Експортуйте проєкт у JSON чи HTML для подальшого поширення.</li>
+    </ul>
+    <menu>
+      <button id="close-help">Закрити</button>
+    </menu>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
