@@ -41,13 +41,24 @@ function loadState() {
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
-      state.scenes = parsed.scenes || [];
+      state.scenes = (parsed.scenes || []).map(normalizeScene);
       state.variables = parsed.variables || [];
       state.selectedSceneId = parsed.selectedSceneId || null;
     } catch (e) {
       console.warn('Не вдалося прочитати збережений стан', e);
     }
   }
+}
+
+function normalizeScene(scene) {
+  return {
+    ...scene,
+    text: scene.text || '',
+    background: scene.background || '',
+    media: scene.media || '',
+    choices: scene.choices || [],
+    layers: scene.layers || [],
+  };
 }
 
 function selectScene(id) {
@@ -91,6 +102,65 @@ function deleteChoice(sceneId, choiceId) {
   const scene = state.scenes.find((s) => s.id === sceneId);
   if (!scene) return;
   scene.choices = scene.choices.filter((c) => c.id !== choiceId);
+  render();
+  saveState();
+}
+
+function addLayer(sceneId, type) {
+  const scene = state.scenes.find((s) => s.id === sceneId);
+  if (!scene) return;
+
+  const basePosition = { x: 12, y: 12 };
+  const newLayer = {
+    id: uid(),
+    type,
+    frameId: null,
+    animation: 'none',
+  };
+
+  if (type === 'text') {
+    Object.assign(newLayer, {
+      label: 'Новий текст',
+      color: '#f8fafc',
+      fontSize: 18,
+      weight: '600',
+      position: { ...basePosition },
+    });
+  } else if (type === 'image') {
+    Object.assign(newLayer, {
+      label: 'Нове зображення',
+      src: '',
+      alt: '',
+      width: 320,
+      height: 180,
+      position: { ...basePosition },
+    });
+  } else if (type === 'frame') {
+    const count = scene.layers.filter((l) => l.type === 'frame').length + 1;
+    Object.assign(newLayer, {
+      label: `Фрейм ${count}`,
+      width: 480,
+      height: 320,
+      position: { ...basePosition },
+      visible: true,
+    });
+  }
+
+  scene.layers.push(newLayer);
+  render();
+  saveState();
+}
+
+function deleteLayer(sceneId, layerId) {
+  const scene = state.scenes.find((s) => s.id === sceneId);
+  if (!scene) return;
+  scene.layers = scene.layers.filter((l) => l.id !== layerId);
+
+  // При видаленні фрейму, скинемо прив'язку у елементів
+  scene.layers = scene.layers.map((layer) =>
+    layer.frameId === layerId ? { ...layer, frameId: null } : layer
+  );
+
   render();
   saveState();
 }
@@ -184,6 +254,12 @@ function renderCanvas() {
       .map((c) => `<div class="connection">→ ${c.label}${c.target ? ` → ${getSceneTitle(c.target)}` : ''}</div>`)
       .join('');
 
+    const frames = scene.layers.filter((l) => l.type === 'frame');
+    const layeredItems = scene.layers.filter((l) => l.type !== 'frame');
+    const layerSummary = scene.layers.length
+      ? `<p class="small muted">Елементів: ${layeredItems.length} • Фреймів: ${frames.length}</p>`
+      : '<p class="muted small">Немає елементів на сцені</p>';
+
     card.innerHTML = `
       <header>
         <h3>${scene.title}</h3>
@@ -191,6 +267,7 @@ function renderCanvas() {
       </header>
       <p class="small">${scene.text.slice(0, 80) || 'Без тексту'}${scene.text.length > 80 ? '…' : ''}</p>
       ${connections || '<p class="muted small">Немає переходів</p>'}
+      ${layerSummary}
     `;
 
     card.addEventListener('click', () => selectScene(scene.id));
@@ -240,6 +317,17 @@ function renderInspector() {
     </div>
     <hr class="divider" />
     <div class="field">
+      <label>Робота з елементами</label>
+      <div class="toolbar">
+        <button type="button" id="add-text-layer">Додати текст</button>
+        <button type="button" id="add-image-layer">Додати зображення</button>
+        <button type="button" class="ghost" id="add-frame-layer">Додати фрейм</button>
+      </div>
+      <p class="small">Додавайте текст, зображення чи фрейми, перетворюючи сцену на багатошарову композицію.</p>
+      <div id="layers-container" class="layer-list"></div>
+    </div>
+    <hr class="divider" />
+    <div class="field">
       <label>Вибори</label>
       <div id="choices-container"></div>
       <button id="add-choice">Додати вибір</button>
@@ -280,6 +368,13 @@ function renderInspector() {
 
   const choicesContainer = wrapper.querySelector('#choices-container');
   renderChoices(choicesContainer, scene);
+
+  const layersContainer = wrapper.querySelector('#layers-container');
+  renderLayers(layersContainer, scene);
+
+  wrapper.querySelector('#add-text-layer').addEventListener('click', () => addLayer(scene.id, 'text'));
+  wrapper.querySelector('#add-image-layer').addEventListener('click', () => addLayer(scene.id, 'image'));
+  wrapper.querySelector('#add-frame-layer').addEventListener('click', () => addLayer(scene.id, 'frame'));
 
   wrapper.querySelector('#add-choice').addEventListener('click', () => addChoice(scene.id));
 }
@@ -322,6 +417,145 @@ function renderChoices(container, scene) {
   });
 }
 
+function renderLayers(container, scene) {
+  container.innerHTML = '';
+
+  if (!scene.layers.length) {
+    container.innerHTML = '<p class="muted small">Додайте текст, зображення чи фрейм, щоб розпочати.</p>';
+    return;
+  }
+
+  const frames = scene.layers.filter((l) => l.type === 'frame');
+
+  scene.layers.forEach((layer) => {
+    const card = document.createElement('article');
+    card.className = 'layer-card';
+
+    const typeLabel =
+      layer.type === 'text' ? 'Текст' : layer.type === 'image' ? 'Зображення' : 'Фрейм';
+
+    const frameSelectOptions = [
+      '<option value="">Поза фреймом</option>',
+      ...frames.map(
+        (frame) =>
+          `<option value="${frame.id}" ${frame.id === layer.frameId ? 'selected' : ''}>${frame.label}</option>`
+      ),
+    ].join('');
+
+    const frameSelector =
+      layer.type !== 'frame'
+        ? `<label class="inline">Фрейм <select data-field="frameId">${frameSelectOptions}</select></label>`
+        : '';
+
+    const animationSelector = `
+      <label class="inline">Анімація
+        <select data-field="animation">
+          <option value="none" ${layer.animation === 'none' ? 'selected' : ''}>Без</option>
+          <option value="fade" ${layer.animation === 'fade' ? 'selected' : ''}>Поява</option>
+          <option value="slide" ${layer.animation === 'slide' ? 'selected' : ''}>Зсув</option>
+          <option value="scale" ${layer.animation === 'scale' ? 'selected' : ''}>Масштаб</option>
+        </select>
+      </label>`;
+
+    const baseControls = `
+      <header>
+        <div>
+          <p class="eyebrow">${typeLabel}</p>
+          <input data-field="label" type="text" value="${layer.label || ''}" />
+        </div>
+        <button type="button" class="ghost" aria-label="Видалити" data-action="delete">✕</button>
+      </header>
+      <div class="layer-grid">
+        <label class="inline">X <input data-field="pos-x" type="number" value="${layer.position?.x || 0}" /></label>
+        <label class="inline">Y <input data-field="pos-y" type="number" value="${layer.position?.y || 0}" /></label>
+        ${layer.type !== 'frame' ? animationSelector : ''}
+        ${frameSelector}
+      </div>
+    `;
+
+    const textControls = layer.type === 'text'
+      ? `
+          <label>Текст
+            <textarea data-field="content">${layer.label || ''}</textarea>
+          </label>
+          <div class="layer-grid">
+            <label class="inline">Колір <input data-field="color" type="color" value="${layer.color || '#f8fafc'}" /></label>
+            <label class="inline">Розмір <input data-field="fontSize" type="number" min="10" max="72" value="${layer.fontSize || 18}" /></label>
+            <label class="inline">Насиченість
+              <select data-field="weight">
+                ${['400', '500', '600', '700']
+                  .map((weight) => `<option value="${weight}" ${weight === (layer.weight || '600') ? 'selected' : ''}>${weight}</option>`)
+                  .join('')}
+              </select>
+            </label>
+          </div>
+        `
+      : '';
+
+    const imageControls = layer.type === 'image'
+      ? `
+          <label>Джерело зображення
+            <input data-field="src" type="text" value="${layer.src || ''}" placeholder="URL або data URI" />
+          </label>
+          <label>Alt-текст
+            <input data-field="alt" type="text" value="${layer.alt || ''}" placeholder="Опис зображення" />
+          </label>
+          <div class="layer-grid">
+            <label class="inline">Ширина <input data-field="width" type="number" min="50" value="${layer.width || 320}" /></label>
+            <label class="inline">Висота <input data-field="height" type="number" min="50" value="${layer.height || 180}" /></label>
+          </div>
+        `
+      : '';
+
+    const frameControls = layer.type === 'frame'
+      ? `
+          <div class="layer-grid">
+            <label class="inline">Ширина <input data-field="width" type="number" min="120" value="${layer.width || 480}" /></label>
+            <label class="inline">Висота <input data-field="height" type="number" min="120" value="${layer.height || 320}" /></label>
+            <label class="inline checkbox">
+              <input data-field="visible" type="checkbox" ${layer.visible !== false ? 'checked' : ''} /> Фрейм видимий
+            </label>
+          </div>
+        `
+      : '';
+
+    card.innerHTML = `${baseControls}${textControls}${imageControls}${frameControls}`;
+
+    card.querySelector('[data-action="delete"]').addEventListener('click', () => deleteLayer(scene.id, layer.id));
+
+    card.querySelectorAll('[data-field]').forEach((input) => {
+      input.addEventListener('input', (e) => {
+        const field = e.target.dataset.field;
+        const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+
+        if (field === 'pos-x' || field === 'pos-y') {
+          const updatedPosition = {
+            ...layer.position,
+            x: field === 'pos-x' ? Number(value) : layer.position?.x || 0,
+            y: field === 'pos-y' ? Number(value) : layer.position?.y || 0,
+          };
+          Object.assign(layer, { position: updatedPosition });
+        } else if (field === 'frameId') {
+          layer.frameId = value || null;
+        } else if (field === 'visible') {
+          layer.visible = !!value;
+        } else if (field === 'fontSize' || field === 'width' || field === 'height') {
+          layer[field] = Number(value);
+        } else if (field === 'content') {
+          layer.label = value;
+        } else {
+          layer[field] = value;
+        }
+
+        saveState();
+        render();
+      });
+    });
+
+    container.appendChild(card);
+  });
+}
+
 function showDialog(dialog) {
   if (typeof dialog.showModal === 'function') {
     dialog.showModal();
@@ -358,6 +592,7 @@ function initDialogs() {
       background,
       media: '',
       choices: [],
+      layers: [],
     });
     closeDialog(elements.sceneDialog);
   });
@@ -382,7 +617,7 @@ function loadFromLink() {
   if (!encoded) return;
   try {
     const parsed = JSON.parse(decodeURIComponent(escape(atob(encoded))));
-    state.scenes = parsed.scenes || [];
+    state.scenes = (parsed.scenes || []).map(normalizeScene);
     state.variables = parsed.variables || [];
     state.selectedSceneId = parsed.selectedSceneId || null;
   } catch (e) {
@@ -442,6 +677,7 @@ function previewProject() {
 }
 
 function render() {
+  state.scenes = state.scenes.map(normalizeScene);
   renderScenesList();
   renderVariables();
   renderCanvas();
@@ -479,6 +715,7 @@ function bootstrap() {
       background: '',
       media: '',
       choices: [],
+      layers: [],
     });
   }
 }
